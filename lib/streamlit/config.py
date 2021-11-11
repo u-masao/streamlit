@@ -581,6 +581,26 @@ def _server_port() -> int:
     return 8501
 
 
+@_create_option("server.certfile", type_=str)
+def _server_certfile() -> str:
+    """Server certificate file for connecting via HTTPS.
+    Must be set at the same time as "server.keyfile".
+
+    Default: None
+    """
+    return None
+
+
+@_create_option("server.keyfile", type_=str)
+def _server_keyfile() -> str:
+    """Cryptographic key file for connecting via HTTPS.
+    Must be set at the same time as "server.certile".
+
+    Default: None
+    """
+    return None
+
+
 _create_option(
     "server.scriptHealthCheckEnabled",
     visibility="hidden",

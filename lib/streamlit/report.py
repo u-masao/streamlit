@@ -51,13 +51,22 @@ class Report(object):
         str
             The URL.
         """
+        schema = (
+            "https"
+            if (
+                config.get_option("server.certfile")
+                and config.get_option("server.keyfile")
+            )
+            else "http"
+        )
         port = _get_browser_address_bar_port()
         base_path = config.get_option("server.baseUrlPath").strip("/")
 
         if base_path:
             base_path = "/" + base_path
 
-        return "http://%(host_ip)s:%(port)s%(base_path)s" % {
+        return "%(schema)s://%(host_ip)s:%(port)s%(base_path)s" % {
+            "schema": schema,
             "host_ip": host_ip.strip("/"),
             "port": port,
             "base_path": base_path,

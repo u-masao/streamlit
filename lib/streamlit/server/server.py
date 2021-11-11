@@ -176,9 +176,18 @@ def start_listening(app: tornado.web.Application) -> None:
     port.  It will error after MAX_PORT_SEARCH_RETRIES attempts.
 
     """
-
+    ssl_options = None
+    certfile = config.get_option("server.certfile")
+    keyfile = config.get_option("server.keyfile")
+    if certfile and keyfile:
+        ssl_option = {
+            "certfile": certfile,
+            "keyfile": keyfile,
+        }
     http_server = HTTPServer(
-        app, max_buffer_size=config.get_option("server.maxUploadSize") * 1024 * 1024
+        app,
+        max_buffer_size=config.get_option("server.maxUploadSize") * 1024 * 1024,
+        ssl_options=ssl_options,
     )
 
     if server_address_is_unix_socket():
