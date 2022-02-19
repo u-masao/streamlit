@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright 2018-2021 Streamlit Inc.
+ * Copyright 2018-2022 Streamlit Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,7 +26,6 @@ import { StyledGraphVizChart } from "./styled-components"
 export interface GraphVizChartProps {
   width: number
   element: GraphVizChartProto
-  index: number
   height: number | undefined
 }
 
@@ -43,10 +42,9 @@ dummyGraphviz // eslint-disable-line @typescript-eslint/no-unused-expressions
 export function GraphVizChart({
   width: propWidth,
   element,
-  index,
   height: propHeight,
 }: GraphVizChartProps): ReactElement {
-  const chartId = `graphviz-chart-${index}`
+  const chartId = `graphviz-chart-${element.elementId}`
 
   let originalHeight = 0
   let originalWidth = 0

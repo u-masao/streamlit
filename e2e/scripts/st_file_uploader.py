@@ -1,4 +1,4 @@
-# Copyright 2018-2021 Streamlit Inc.
+# Copyright 2018-2022 Streamlit Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,8 +20,23 @@ if single_file is None:
 else:
     st.text(single_file.read())
 
+# Here and throughout this file, we use if st._is_running_with_streamlit:
+# since we also run e2e python files in "bare Python mode" as part of our
+# Python tests, and this doesn't work in that circumstance
+# st.session_state can only be accessed while running with streamlit
 if st._is_running_with_streamlit:
     st.write(repr(st.session_state.single) == repr(single_file))
+
+disabled = st.file_uploader(
+    "Can't drop a file:", type=["txt"], key="disabled", disabled=True
+)
+if disabled is None:
+    st.text("No upload")
+else:
+    st.text(disabled.read())
+
+if st._is_running_with_streamlit:
+    st.write(repr(st.session_state.disabled) == repr(disabled))
 
 multiple_files = st.file_uploader(
     "Drop multiple files:",
@@ -45,3 +60,20 @@ with st.form("foo"):
         st.text("No upload")
     else:
         st.text(form_file.read())
+
+
+if st._is_running_with_streamlit:
+    if not st.session_state.get("counter"):
+        st.session_state["counter"] = 0
+
+    def file_uploader_on_change():
+        st.session_state.counter += 1
+
+    st.file_uploader(
+        "Drop a file:",
+        type=["txt"],
+        key="on_change_file_uploader_key",
+        on_change=file_uploader_on_change,
+    )
+
+    st.text(st.session_state.counter)

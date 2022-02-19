@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2018-2021 Streamlit Inc.
+# Copyright 2018-2022 Streamlit Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -322,11 +322,11 @@ def run_component_template_e2e_test(ctx: Context, template_dir: str, name: str) 
     # Start the template's dev server.
     with AsyncSubprocess(["yarn", "start"], cwd=frontend_dir) as webpack_proc:
         # Run the test!
-        script_path = join(template_dir, "__init__.py")
+        main_script_path = join(template_dir, "__init__.py")
         spec_path = join(ROOT_DIR, "e2e/specs/component_template.spec.js")
 
         ctx.cypress_env_vars["COMPONENT_TEMPLATE_TYPE"] = name
-        success = run_test(ctx, spec_path, ["streamlit", "run", script_path])
+        success = run_test(ctx, spec_path, ["streamlit", "run", main_script_path])
         del ctx.cypress_env_vars["COMPONENT_TEMPLATE_TYPE"]
 
         webpack_stdout = webpack_proc.terminate()

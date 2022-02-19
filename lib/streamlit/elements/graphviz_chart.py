@@ -1,4 +1,4 @@
-# Copyright 2018-2021 Streamlit Inc.
+# Copyright 2018-2022 Streamlit Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,13 +14,14 @@
 
 """Streamlit support for GraphViz charts."""
 
+import hashlib
 from typing import cast
 
 import streamlit
 from streamlit import type_util
+from streamlit.errors import StreamlitAPIException
 from streamlit.logger import get_logger
 from streamlit.proto.GraphVizChart_pb2 import GraphVizChart as GraphVizChartProto
-from streamlit.errors import StreamlitAPIException
 
 LOGGER = get_logger(__name__)
 
@@ -84,12 +85,17 @@ class GraphvizMixin:
         ''')
 
         .. output::
-           https://static.streamlit.io/0.56.0-xTAd/index.html?id=GBn3GXZie5K1kXuBKe4yQL
-           height: 400px
+           https://share.streamlit.io/streamlit/docs/main/python/api-examples-source/charts.graphviz_chart.py
+           height: 600px
 
         """
+        # Generate element ID from delta path
+        delta_path = self.dg._get_delta_path_str()
+        element_id = hashlib.md5(delta_path.encode()).hexdigest()
+
         graphviz_chart_proto = GraphVizChartProto()
-        marshall(graphviz_chart_proto, figure_or_dot, use_container_width)
+
+        marshall(graphviz_chart_proto, figure_or_dot, use_container_width, element_id)
         return self.dg._enqueue("graphviz_chart", graphviz_chart_proto)
 
     @property
@@ -98,7 +104,7 @@ class GraphvizMixin:
         return cast("streamlit.delta_generator.DeltaGenerator", self)
 
 
-def marshall(proto, figure_or_dot, use_container_width):
+def marshall(proto, figure_or_dot, use_container_width, element_id):
     """Construct a GraphViz chart object.
 
     See DeltaGenerator.graphviz_chart for docs.
@@ -115,3 +121,4 @@ def marshall(proto, figure_or_dot, use_container_width):
 
     proto.spec = dot
     proto.use_container_width = use_container_width
+    proto.element_id = element_id

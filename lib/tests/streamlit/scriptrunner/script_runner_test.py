@@ -1,4 +1,4 @@
-# Copyright 2018-2021 Streamlit Inc.
+# Copyright 2018-2022 Streamlit Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,8 +17,8 @@
 import os
 import sys
 import time
-from typing import List
-from unittest.mock import patch
+from typing import List, Any
+from unittest.mock import MagicMock, patch
 
 import pytest
 from parameterized import parameterized
@@ -30,11 +30,12 @@ from streamlit.proto.ClientState_pb2 import ClientState
 from streamlit.proto.Delta_pb2 import Delta
 from streamlit.proto.Element_pb2 import Element
 from streamlit.proto.WidgetStates_pb2 import WidgetStates
-from streamlit.report import Report
-from streamlit.report_queue import ReportQueue
+from streamlit.session_data import SessionData
+from streamlit.forward_msg_queue import ForwardMsgQueue
 from streamlit.script_request_queue import RerunData, ScriptRequest, ScriptRequestQueue
 from streamlit.script_runner import ScriptRunner, ScriptRunnerEvent
 from streamlit.state.session_state import SessionState
+from streamlit.uploaded_file_manager import UploadedFileManager
 from tests import testutil
 
 text_utf = "complete! 👨‍🎤"
@@ -54,12 +55,6 @@ def _create_widget(id, states):
 
 
 class ScriptRunnerTest(AsyncTestCase):
-    def setUp(self):
-        super(ScriptRunnerTest, self).setUp()
-
-    def tearDown(self):
-        super(ScriptRunnerTest, self).tearDown()
-
     def test_startup_shutdown(self):
         """Test that we can create and shut down a ScriptRunner."""
         scriptrunner = TestScriptRunner("good_script.py")
@@ -69,6 +64,73 @@ class ScriptRunnerTest(AsyncTestCase):
         self._assert_no_exceptions(scriptrunner)
         self._assert_events(scriptrunner, [ScriptRunnerEvent.SHUTDOWN])
         self._assert_text_deltas(scriptrunner, [])
+
+    @parameterized.expand(
+        [
+            ("installTracer=False", False),
+            ("installTracer=True", True),
+        ]
+    )
+    def test_enqueue(self, _, install_tracer):
+        """Make sure we try to handle execution control requests whenever
+        our _enqueue function is called, unless "runner.installTracer" is set.
+        """
+        with testutil.patch_config_options({"runner.installTracer": install_tracer}):
+            # Create a TestScriptRunner. We won't actually be starting its
+            # script thread - instead, we'll manually call _enqueue on it, and
+            # pretend we're in the script thread.
+            runner = TestScriptRunner("not_a_script.py")
+            runner._is_in_script_thread = MagicMock(return_value=True)
+
+            maybe_handle_execution_control_request_mock = MagicMock()
+            runner._maybe_handle_execution_control_request = (
+                maybe_handle_execution_control_request_mock
+            )
+
+            enqueue_forward_msg_mock = MagicMock()
+            runner._enqueue_forward_msg = enqueue_forward_msg_mock
+
+            # Enqueue a message on the runner
+            mock_msg = MagicMock()
+            runner._enqueue(mock_msg)
+
+            # Ensure the message was "bubbled up" to the enqueue callback.
+            enqueue_forward_msg_mock.assert_called_once_with(mock_msg)
+
+            # If "install_tracer" is true, maybe_handle_execution_control_request
+            # should not be called by the enqueue function. (In reality, it will
+            # still be called once in the tracing callback But in this test
+            # we're not actually installing a tracer - the script is not being
+            # run.) If "install_tracer" is false, the function should be called
+            # once.
+            expected_call_count = 0 if install_tracer else 1
+            self.assertEqual(
+                expected_call_count,
+                maybe_handle_execution_control_request_mock.call_count,
+            )
+
+    def test_maybe_handle_execution_control_request_from_other_thread(self):
+        """maybe_handle_execution_control_request should no-op if called
+        from another thread.
+        """
+        runner = TestScriptRunner("not_a_script.py")
+        runner._execing = True
+
+        # Mock ScriptRunner._request_queue.dequeue
+        request_queue_mock = MagicMock()
+        runner._request_queue = request_queue_mock
+
+        # If _is_in_script_thread is True, our _request_queue should get popped.
+        runner._is_in_script_thread = MagicMock(return_value=True)
+        request_queue_mock.dequeue = MagicMock(return_value=(None, None))
+        runner._maybe_handle_execution_control_request()
+        request_queue_mock.dequeue.assert_called_once()
+
+        # If _is_in_script_thread is False, it shouldn't get popped.
+        runner._is_in_script_thread = MagicMock(return_value=False)
+        request_queue_mock.dequeue = MagicMock(return_value=(None, None))
+        runner._maybe_handle_execution_control_request()
+        request_queue_mock.dequeue.assert_not_called()
 
     @parameterized.expand(
         [
@@ -100,7 +162,7 @@ class ScriptRunnerTest(AsyncTestCase):
         # files contained in the directory of __main__.__file__, which we
         # assume is the main script directory.
         self.assertEqual(
-            scriptrunner._report.script_path,
+            scriptrunner._session_data.main_script_path,
             sys.modules["__main__"].__file__,
             (" ScriptRunner should set the __main__.__file__" "attribute correctly"),
         )
@@ -381,6 +443,25 @@ class ScriptRunnerTest(AsyncTestCase):
         scriptrunner.join()
         self._assert_no_exceptions(scriptrunner)
 
+    def test_query_string_saved(self):
+        scriptrunner = TestScriptRunner("good_script.py")
+        scriptrunner.enqueue_rerun(query_string="foo=bar")
+        scriptrunner.start()
+        scriptrunner.join()
+
+        self._assert_no_exceptions(scriptrunner)
+        self._assert_events(
+            scriptrunner,
+            [
+                ScriptRunnerEvent.SCRIPT_STARTED,
+                ScriptRunnerEvent.SCRIPT_STOPPED_WITH_SUCCESS,
+                ScriptRunnerEvent.SHUTDOWN,
+            ],
+        )
+
+        shutdown_data = scriptrunner.event_data[-1]
+        self.assertEqual(shutdown_data["client_state"].query_string, "foo=bar")
+
     def test_coalesce_rerun(self):
         """Tests that multiple pending rerun requests get coalesced."""
         scriptrunner = TestScriptRunner("good_script.py")
@@ -583,7 +664,7 @@ class ScriptRunnerTest(AsyncTestCase):
         self.assertEqual(num_deltas, len(scriptrunner.deltas()))
 
     def _assert_text_deltas(self, scriptrunner, text_deltas):
-        """Asserts that the scriptrunner's ReportQueue contains text deltas
+        """Asserts that the scriptrunner's ForwardMsgQueue contains text deltas
         with the given contents.
 
         Parameters
@@ -600,39 +681,41 @@ class TestScriptRunner(ScriptRunner):
 
     def __init__(self, script_name):
         """Initializes the ScriptRunner for the given script_name"""
-        # DeltaGenerator deltas will be enqueued into self.report_queue.
-        self.report_queue = ReportQueue()
-
-        def enqueue_fn(msg):
-            self.report_queue.enqueue(msg)
-            self.maybe_handle_execution_control_request()
+        # DeltaGenerator deltas will be enqueued into self.forward_msg_queue.
+        self.forward_msg_queue = ForwardMsgQueue()
 
         self.script_request_queue = ScriptRequestQueue()
-        script_path = os.path.join(os.path.dirname(__file__), "test_data", script_name)
+        main_script_path = os.path.join(
+            os.path.dirname(__file__), "test_data", script_name
+        )
 
         super(TestScriptRunner, self).__init__(
             session_id="test session id",
-            report=Report(script_path, "test command line"),
-            enqueue_forward_msg=enqueue_fn,
+            session_data=SessionData(main_script_path, "test command line"),
+            enqueue_forward_msg=self.forward_msg_queue.enqueue,
             client_state=ClientState(),
             session_state=SessionState(),
             request_queue=self.script_request_queue,
+            uploaded_file_mgr=UploadedFileManager(),
         )
 
         # Accumulates uncaught exceptions thrown by our run thread.
         self.script_thread_exceptions = []
 
         # Accumulates all ScriptRunnerEvents emitted by us.
-        self.events = []
+        self.events: List[ScriptRunnerEvent] = []
+        self.event_data: List[Any] = []
 
         def record_event(event, **kwargs):
             self.events.append(event)
+            self.event_data.append(kwargs)
 
         self.on_event.connect(record_event, weak=False)
 
-    def enqueue_rerun(self, argv=None, widget_states=None):
+    def enqueue_rerun(self, argv=None, widget_states=None, query_string=""):
         self.script_request_queue.enqueue(
-            ScriptRequest.RERUN, RerunData(widget_states=widget_states)
+            ScriptRequest.RERUN,
+            RerunData(widget_states=widget_states, query_string=query_string),
         )
 
     def enqueue_stop(self):
@@ -641,15 +724,15 @@ class TestScriptRunner(ScriptRunner):
     def enqueue_shutdown(self):
         self.script_request_queue.enqueue(ScriptRequest.SHUTDOWN)
 
-    def _process_request_queue(self):
+    def _run_script_thread(self):
         try:
-            super(TestScriptRunner, self)._process_request_queue()
+            super()._run_script_thread()
         except BaseException as e:
             self.script_thread_exceptions.append(e)
 
     def _run_script(self, rerun_data):
-        self.report_queue.clear()
-        super(TestScriptRunner, self)._run_script(rerun_data)
+        self.forward_msg_queue.clear()
+        super()._run_script(rerun_data)
 
     def join(self):
         """Joins the run thread, if it was started"""
@@ -657,19 +740,21 @@ class TestScriptRunner(ScriptRunner):
             self._script_thread.join()
 
     def clear_deltas(self):
-        """Clear all delta messages from our ReportQueue"""
-        self.report_queue.clear()
+        """Clear all delta messages from our ForwardMsgQueue"""
+        self.forward_msg_queue.clear()
 
     def deltas(self) -> List[Delta]:
-        """Return the delta messages in our ReportQueue"""
-        return [msg.delta for msg in self.report_queue._queue if msg.HasField("delta")]
+        """Return the delta messages in our ForwardMsgQueue"""
+        return [
+            msg.delta for msg in self.forward_msg_queue._queue if msg.HasField("delta")
+        ]
 
     def elements(self) -> List[Element]:
-        """Return the delta.new_element messages in our ReportQueue."""
+        """Return the delta.new_element messages in our ForwardMsgQueue."""
         return [delta.new_element for delta in self.deltas()]
 
     def text_deltas(self) -> List[str]:
-        """Return the string contents of text deltas in our ReportQueue"""
+        """Return the string contents of text deltas in our ForwardMsgQueue"""
         return [
             element.text.body
             for element in self.elements()

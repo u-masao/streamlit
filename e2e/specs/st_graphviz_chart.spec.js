@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright 2018-2021 Streamlit Inc.
+ * Copyright 2018-2022 Streamlit Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,13 +17,26 @@
 
 describe("st.graphviz_chart", () => {
   before(() => {
-    cy.visit("http://localhost:3000/");
+    cy.loadApp("http://localhost:3000/");
 
     // Make the ribbon decoration line disappear
     cy.get("[data-testid='stDecoration']").invoke("css", "display", "none");
   });
 
   beforeEach(() => {
-    return cy.get(".stGraphVizChart").should("have.length", 3);
+    return cy
+      .get(".stGraphVizChart > svg > g > title")
+      .should("have.length", 5);
+  });
+
+  it("shows left and right graph", () => {
+    cy.getIndexed(".stGraphVizChart > svg > g > title", 3).should(
+      "contain",
+      "Left"
+    );
+    cy.getIndexed(".stGraphVizChart > svg > g > title", 4).should(
+      "contain",
+      "Right"
+    );
   });
 });

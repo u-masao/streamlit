@@ -1,4 +1,4 @@
-# Copyright 2018-2021 Streamlit Inc.
+# Copyright 2018-2022 Streamlit Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional
 
 import click
 import tornado.ioloop
+from streamlit import session_data
 from streamlit.git_util import GitRepo, MIN_GIT_VERSION
 
 from streamlit import version
@@ -30,7 +31,6 @@ from streamlit import secrets
 from streamlit import util
 from streamlit.config import CONFIG_FILENAMES
 from streamlit.logger import get_logger
-from streamlit.report import Report
 from streamlit.secrets import SECRETS_FILE_LOC
 from streamlit.server.server import Server, server_address_is_unix_socket
 from streamlit.watcher.file_watcher import watch_file
@@ -74,13 +74,13 @@ def _set_up_signal_handler() -> None:
         signal.signal(signal.SIGQUIT, signal_handler)
 
 
-def _fix_sys_path(script_path: str) -> None:
+def _fix_sys_path(main_script_path: str) -> None:
     """Add the script's folder to the sys path.
 
     Python normally does this automatically, but since we exec the script
     ourselves we need to do it instead.
     """
-    sys.path.insert(0, os.path.dirname(script_path))
+    sys.path.insert(0, os.path.dirname(main_script_path))
 
 
 def _fix_matplotlib_crash() -> None:
@@ -145,17 +145,17 @@ def _fix_tornado_crash() -> None:
                 asyncio.set_event_loop_policy(WindowsSelectorEventLoopPolicy())
 
 
-def _fix_sys_argv(script_path: str, args: List[str]) -> None:
+def _fix_sys_argv(main_script_path: str, args: List[str]) -> None:
     """sys.argv needs to exclude streamlit arguments and parameters
     and be set to what a user's script may expect.
     """
     import sys
 
-    sys.argv = [script_path] + list(args)
+    sys.argv = [main_script_path] + list(args)
 
 
 def _on_server_start(server: Server) -> None:
-    _maybe_print_old_git_warning(server.script_path)
+    _maybe_print_old_git_warning(server.main_script_path)
     _print_url(server.is_running_hello)
     report_watchdog_availability()
     _print_new_version_message()
@@ -189,7 +189,7 @@ def _on_server_start(server: Server) -> None:
         else:
             addr = "localhost"
 
-        util.open_browser(Report.get_url(addr))
+        util.open_browser(session_data.get_url(addr))
 
     # Schedule the browser to open using the IO Loop on the main thread, but
     # only if no other browser connects within 1s.
@@ -218,33 +218,33 @@ def _print_url(is_running_hello: bool) -> None:
 
     if config.is_manually_set("browser.serverAddress"):
         named_urls = [
-            ("URL", Report.get_url(config.get_option("browser.serverAddress")))
+            ("URL", session_data.get_url(config.get_option("browser.serverAddress")))
         ]
 
     elif (
         config.is_manually_set("server.address") and not server_address_is_unix_socket()
     ):
         named_urls = [
-            ("URL", Report.get_url(config.get_option("server.address"))),
+            ("URL", session_data.get_url(config.get_option("server.address"))),
         ]
 
     elif config.get_option("server.headless"):
         internal_ip = net_util.get_internal_ip()
         if internal_ip:
-            named_urls.append(("Network URL", Report.get_url(internal_ip)))
+            named_urls.append(("Network URL", session_data.get_url(internal_ip)))
 
         external_ip = net_util.get_external_ip()
         if external_ip:
-            named_urls.append(("External URL", Report.get_url(external_ip)))
+            named_urls.append(("External URL", session_data.get_url(external_ip)))
 
     else:
         named_urls = [
-            ("Local URL", Report.get_url("localhost")),
+            ("Local URL", session_data.get_url("localhost")),
         ]
 
         internal_ip = net_util.get_internal_ip()
         if internal_ip:
-            named_urls.append(("Network URL", Report.get_url(internal_ip)))
+            named_urls.append(("Network URL", session_data.get_url(internal_ip)))
 
     click.secho("")
     click.secho("  %s" % title_message, fg="blue", bold=True)
@@ -265,11 +265,11 @@ def _print_url(is_running_hello: bool) -> None:
         click.secho("")
 
 
-def _maybe_print_old_git_warning(script_path: str) -> None:
+def _maybe_print_old_git_warning(main_script_path: str) -> None:
     """If our script is running in a Git repo, and we're running a very old
     Git version, print a warning that Git integration will be unavailable.
     """
-    repo = GitRepo(script_path)
+    repo = GitRepo(main_script_path)
     if (
         not repo.is_valid()
         and repo.git_version is not None
@@ -328,7 +328,7 @@ def _install_config_watchers(flag_options: Dict[str, Any]) -> None:
 
 
 def run(
-    script_path: str,
+    main_script_path: str,
     command_line: Optional[str],
     args: List[str],
     flag_options: Dict[str, Any],
@@ -337,10 +337,10 @@ def run(
 
     This starts a blocking ioloop.
     """
-    _fix_sys_path(script_path)
+    _fix_sys_path(main_script_path)
     _fix_matplotlib_crash()
     _fix_tornado_crash()
-    _fix_sys_argv(script_path, args)
+    _fix_sys_argv(main_script_path, args)
     _fix_pydeck_mapbox_api_warning()
     _install_config_watchers(flag_options)
 
@@ -351,12 +351,8 @@ def run(
     ioloop = tornado.ioloop.IOLoop.current()
 
     # Create and start the server.
-    server = Server(ioloop, script_path, command_line)
+    server = Server(ioloop, main_script_path, command_line)
     server.start(_on_server_start)
-
-    # (Must come after start(), because this starts a new thread and start()
-    # may call sys.exit() which doesn't kill other threads.
-    server.add_preheated_report_session()
 
     # Start the ioloop. This function will not return until the
     # server is shut down.

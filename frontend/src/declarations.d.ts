@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright 2018-2021 Streamlit Inc.
+ * Copyright 2018-2022 Streamlit Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,9 +26,13 @@ declare module "@deck.gl/aggregation-layers"
 
 declare module "@deck.gl/geo-layers"
 
+declare module "@deck.gl/mesh-layers"
+
 declare module "@loaders.gl/core"
 
 declare module "@loaders.gl/csv"
+
+declare module "@loaders.gl/gltf"
 
 declare module "@emotion/styled" {
   import { CreateStyled } from "@emotion/styled/types/index"

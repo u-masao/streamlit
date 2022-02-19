@@ -1,4 +1,4 @@
-# Copyright 2018-2021 Streamlit Inc.
+# Copyright 2018-2022 Streamlit Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,13 +13,13 @@
 # limitations under the License.
 
 from textwrap import dedent
-from typing import cast, Optional
+from typing import Optional, cast
 
 import attr
-
 import streamlit
 from streamlit.errors import StreamlitAPIException
 from streamlit.proto.Metric_pb2 import Metric as MetricProto
+
 from .utils import clean_text
 
 
@@ -62,8 +62,8 @@ class MetricMixin:
         >>> st.metric(label="Temperature", value="70 °F", delta="1.2 °F")
 
         .. output::
-            https://static.streamlit.io/0.86.0-mT2t/index.html?id=1TxwRhgBgFg62p2AXqJdM
-            height: 175px
+            https://share.streamlit.io/streamlit/docs/main/python/api-examples-source/metric.example1.py
+            height: 210px
 
         ``st.metric`` looks especially nice in combination with ``st.columns``:
 
@@ -73,8 +73,8 @@ class MetricMixin:
         >>> col3.metric("Humidity", "86%", "4%")
 
         .. output::
-            https://static.streamlit.io/0.86.0-mT2t/index.html?id=4K9bKXhiPAxBNhktd8cxbg
-            height: 175px
+            https://share.streamlit.io/streamlit/docs/main/python/api-examples-source/metric.example2.py
+            height: 210px
 
         The delta indicator color can also be inverted or turned off:
 
@@ -85,8 +85,8 @@ class MetricMixin:
         ...     delta_color="off")
 
         .. output::
-            https://static.streamlit.io/0.86.0-mT2t/index.html?id=UTtQvbBQFaPtCmPcQ23wpP
-            height: 275px
+            https://share.streamlit.io/streamlit/docs/main/python/api-examples-source/metric.example3.py
+            height: 320px
 
         """
         metric_proto = MetricProto()
@@ -105,7 +105,8 @@ class MetricMixin:
     def parse_label(self, label):
         if not isinstance(label, str):
             raise TypeError(
-                f"'{str(label)}' is not an accepted type. label only accepts: str"
+                f"'{str(label)}' is of type {str(type(label))}, which is not an accepted type."
+                " label only accepts: str. Please convert the label to an accepted type."
             )
         return label
 
@@ -114,11 +115,20 @@ class MetricMixin:
             return "—"
         if isinstance(value, float) or isinstance(value, int) or isinstance(value, str):
             return str(value)
-        else:
-            raise TypeError(
-                f"'{str(value)}' is not an accepted type. value only accepts: "
-                "int, float, str, or None"
-            )
+        elif hasattr(value, "item"):
+            # Add support for numpy values (e.g. int16, float64, etc.)
+            try:
+                # Item could also be just a variable, so we use try, except
+                if isinstance(value.item(), float) or isinstance(value.item(), int):
+                    return str(value.item())
+            except Exception:
+                pass
+
+        raise TypeError(
+            f"'{str(value)}' is of type {str(type(value))}, which is not an accepted type."
+            " value only accepts: int, float, str, or None."
+            " Please convert the value to an accepted type."
+        )
 
     def parse_delta(self, delta):
         if delta is None or delta == "":
@@ -129,8 +139,9 @@ class MetricMixin:
             return str(delta)
         else:
             raise TypeError(
-                f"'{str(delta)}' is not an accepted type. delta only accepts:"
-                " int, float, str, or None"
+                f"'{str(delta)}' is of type {str(type(delta))}, which is not an accepted type."
+                " delta only accepts: int, float, str, or None."
+                " Please convert the value to an accepted type."
             )
 
     def determine_delta_color_and_direction(self, delta_color, delta):

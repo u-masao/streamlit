@@ -1,4 +1,4 @@
-# Copyright 2018-2021 Streamlit Inc.
+# Copyright 2018-2022 Streamlit Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -153,7 +153,8 @@ class MetricTest(testutil.DeltaGeneratorTestCase):
             st.metric(123, "-321")
 
         self.assertEqual(
-            "'123' is not an accepted type. label only accepts: str",
+            "'123' is of type <class 'int'>, which is not an accepted type."
+            " label only accepts: str. Please convert the label to an accepted type.",
             str(exc.exception),
         )
 
@@ -162,7 +163,8 @@ class MetricTest(testutil.DeltaGeneratorTestCase):
             st.metric("Testing", [1, 2, 3])
 
         self.assertEqual(
-            "'[1, 2, 3]' is not an accepted type. value only accepts: int, float, str, or None",
+            "'[1, 2, 3]' is of type <class 'list'>, which is not an accepted type."
+            " value only accepts: int, float, str, or None. Please convert the value to an accepted type.",
             str(exc.exception),
         )
 
@@ -171,7 +173,8 @@ class MetricTest(testutil.DeltaGeneratorTestCase):
             st.metric("Testing", "123", [123])
 
         self.assertEqual(
-            "'[123]' is not an accepted type. delta only accepts: int, float, str, or None",
+            "'[123]' is of type <class 'list'>, which is not an accepted type."
+            " delta only accepts: int, float, str, or None. Please convert the value to an accepted type.",
             str(exc.exception),
         )
 

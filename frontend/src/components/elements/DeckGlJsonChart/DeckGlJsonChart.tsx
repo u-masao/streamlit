@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright 2018-2021 Streamlit Inc.
+ * Copyright 2018-2022 Streamlit Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,9 +25,11 @@ import * as layers from "@deck.gl/layers"
 import { JSONConverter } from "@deck.gl/json"
 import * as geoLayers from "@deck.gl/geo-layers"
 import * as aggregationLayers from "@deck.gl/aggregation-layers"
+import * as meshLayers from "@deck.gl/mesh-layers"
 /* eslint-enable */
 
 import { CSVLoader } from "@loaders.gl/csv"
+import { GLTFLoader } from "@loaders.gl/gltf"
 import { registerLoaders } from "@loaders.gl/core"
 
 import withFullScreenWrapper from "src/hocs/withFullScreenWrapper"
@@ -54,10 +56,10 @@ interface DeckObject {
 }
 
 const configuration = {
-  classes: { ...layers, ...aggregationLayers, ...geoLayers },
+  classes: { ...layers, ...aggregationLayers, ...geoLayers, ...meshLayers },
 }
 
-registerLoaders([CSVLoader])
+registerLoaders([CSVLoader, GLTFLoader])
 
 const jsonConverter = new JSONConverter({ configuration })
 

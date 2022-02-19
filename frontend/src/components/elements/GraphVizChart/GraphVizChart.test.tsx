@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright 2018-2021 Streamlit Inc.
+ * Copyright 2018-2022 Streamlit Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,10 +48,10 @@ const getProps = (
 ): GraphVizChartProps => ({
   element: GraphVizChartProto.create({
     spec: `digraph "Hello World" {Hello -> World}`,
+    elementId: "1",
     ...elementProps,
   }),
   width: 0,
-  index: 0,
   height: undefined,
 })
 
@@ -93,7 +93,6 @@ describe("GraphVizChart Element", () => {
       ...getProps(),
       height: 500,
       width: 400,
-      index: 1,
     }
     const wrapper = mount(<GraphVizChart {...props} />)
 
