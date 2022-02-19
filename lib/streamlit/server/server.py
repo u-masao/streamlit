@@ -180,7 +180,7 @@ def start_listening(app: tornado.web.Application) -> None:
     certfile = config.get_option("server.certfile")
     keyfile = config.get_option("server.keyfile")
     if certfile and keyfile:
-        ssl_option = {
+        ssl_options = {
             "certfile": certfile,
             "keyfile": keyfile,
         }
