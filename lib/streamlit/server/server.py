@@ -171,8 +171,8 @@ def start_listening(app: tornado.web.Application) -> None:
 
     """
     ssl_options = None
-    certfile = config.get_option("server.certfile")
-    keyfile = config.get_option("server.keyfile")
+    certfile = config.get_option("server.sslCertFile")
+    keyfile = config.get_option("server.sslKeyFile")
     if certfile and keyfile:
         ssl_options = {
             "certfile": certfile,

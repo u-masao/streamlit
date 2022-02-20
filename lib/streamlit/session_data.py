@@ -41,8 +41,8 @@ def get_url(host_ip: str) -> str:
     schema = (
         "https"
         if (
-            config.get_option("server.certfile")
-            and config.get_option("server.keyfile")
+            config.get_option("server.sslCertFile")
+            and config.get_option("server.sslKeyFile")
         )
         else "http"
     )
