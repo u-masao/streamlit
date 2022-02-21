@@ -329,6 +329,8 @@ class ConfigTest(unittest.TestCase):
                 "server.address",
                 "server.allowRunOnSave",
                 "server.port",
+                "server.sslCertFile",
+                "server.sslKeyFile",
                 "server.runOnSave",
                 "server.maxUploadSize",
                 "server.maxMessageSize",
